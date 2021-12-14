@@ -1,5 +1,5 @@
 from ..client import Client
-from .command import slash_command, user_command, message_command
+from .command import slash_command, user_command, message_command, resolve_message, resolve_user
 
 from collections import defaultdict
 
@@ -71,3 +71,30 @@ class Bot(Client):
                 for c in guild_commands[guild]:
                     if c.name == r["name"]:
                         self._commands[r["id"]] = c
+    
+    async def on_interaction(self, interaction):
+        data = interaction.data
+
+        if interaction.type.value == 2:
+            command = self._commands[data["id"]]
+
+            if data["type"] == 1:
+                subcommand_name, options = await command.resolve_options(interaction)
+
+                if subcommand_name is not None:
+                    for option in command.options:
+                        callback = option.subcommand_callback
+                        break
+                    else:
+                        raise ValueError("unknown subcommand!")
+                    
+                else:
+                    callback = command.callback
+                
+                await callback(interaction, **options)
+            elif data["type"] == 2:
+                user = resolve_user(interaction, data["target_id"])
+                await command.callback(interaction, user)
+            elif data["type"] == 3:
+                message = resolve_message(interaction, data["target_id"])
+                await command.callback(interaction, message)

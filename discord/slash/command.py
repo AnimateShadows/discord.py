@@ -10,6 +10,7 @@ from ..channel import (
     Thread,
     StageChannel,
 )
+from ..message import Message
 
 import inspect
 from typing import Union
@@ -67,6 +68,8 @@ class Option:
         self.autocomplete_enabled = "autocomplete" in kwargs
         self.autocomplete = kwargs.pop("autocomplete", None)
 
+        self.subcommand_callback = kwargs.pop("subcommand_callback", None)
+
     def __repr__(self):
         return f"Option<type={self.type} name={self.name!r} description={self.description!r} required={self.required} choices={self.choices!r} min_value={self.min_value} max_value={self.max_value} channel_types={self.channel_types} autocomplete={self.autocomplete_enabled}>"
 
@@ -85,14 +88,38 @@ class Option:
         data["autocomplete"] = self.autocomplete_enabled
         return data
 
+def resolve_user(interaction, option):
+    if isinstance(option, dict):
+        value = option["value"]
+    else:
+        value = option
+
+    data = interaction.data
+    user_data = data["resolved"]["users"][value]
+    if value in data["resolved"]["members"]:
+        member_data = data["resolved"]["members"][value]
+        member_data["user"] = user_data
+
+        return Member(data=member_data, guild=interaction.guild, state=interaction._state)
+    else:
+        return User(data=user_data, state=interaction._state)
+
+def resolve_role(interaction, option):
+    data = interaction.data
+    role_data = data["resolved"]["roles"][option["value"]]
+    return Role(guild=interaction.guild, state=interaction._state, data=role_data)
+
+def resolve_message(interaction, value):
+    message_data = interaction.data["resolved"]["messages"][value]
+    return Message(state=interaction._state, channel=interaction.channel, data=message_data)
 
 class ApplicationCommand:
-    def __init__(self, fn, **kwargs):
-        self.fn = fn
+    def __init__(self, func, **kwargs):
+        self.callback = func
 
         self.type = kwargs.pop("type", 1)
         self.name = kwargs.pop("name")
-        self.description = kwargs.pop("description")
+        self.description = kwargs.pop("description", None)
         self.default_permission = kwargs.pop("default_permission", True)
 
         self.permissions = kwargs.pop("permissions", None)
@@ -107,12 +134,14 @@ class ApplicationCommand:
         data = {
             "type": self.type,
             "name": self.name,
-            "description": self.description,
             "default_permission": self.default_permission,
         }
 
+        if self.description is not None:
+            data["description"] = self.description
+
         if self.options is not None and self.options:
-            data["options"] = self.options
+            data["options"] = [o.to_dict() for o in self.options]
 
         return data
     
@@ -121,14 +150,56 @@ class ApplicationCommand:
             if hasattr(func, "__slash_options__"):
                 kwargs["options"] = func.__slash_options__
             kwargs["type"] = 1
+            kwargs["subcommand_callback"] = func
 
             option = Option(**kwargs)
             if self.options is None:
                 self.options = []
 
-            self.options.append(option.to_dict())
+            self.options.append(option)
             return option
         return func
+
+    async def resolve_options(self, interaction):
+        data = interaction.data 
+
+        options = []
+        subcommand_name = None
+
+        for option in data["options"]:
+            if option["type"] == 1:
+                subcommand_name = option["name"]
+                options = option["options"]
+                break
+            else:
+                options.append(option)
+        
+        resolved_options = {}
+        for option in options:
+            if option["type"] in (3, 4, 5, 10):
+                resolved_options[option["name"]] = option["value"]
+
+            elif option["type"] == 6:
+                resolved_options[option["name"]] = resolve_user(interaction, option)
+
+            elif option["type"] == 7:
+                channel = interaction.guild.get_channel(int(option["value"]))
+                if channel is None:
+                    channel = await interaction.guild.fetch_channel(int(option["value"]))
+                
+                resolved_options[option["name"]] = channel
+            
+            elif option["type"] == 8:
+                resolved_options[option["name"]] = resolve_role(interaction, option)
+            
+            elif option["type"] == 9:
+                if "users" in data["resolved"] and option["value"] in data["resolved"]["users"]:
+                    resolved_options[option["name"]] = resolve_user(interaction, option)
+                else:
+                    resolved_options[option["name"]] = resolve_role(interaction, option)
+
+        return subcommand_name, resolved_options
+
 
 def option(name, **kwargs):
     opt_name = name
@@ -165,12 +236,12 @@ def option(name, **kwargs):
                         DMChannel: 7,
                         CategoryChannel: 7,
                         StoreChannel: 7,
-                        Union[Role, Member]: 8,
-                        Union[Role, User]: 8,
+                        Role: 8,
+                        Union[Role, Member]: 9,
+                        Union[Role, User]: 9,
                         float: 10,
                     }
                     opt_type = types.get(annotation, str)
-
                     kwargs["type"] = opt_type
 
                 kwargs["name"] = pname
@@ -191,7 +262,7 @@ def slash_command(**kwargs):
         kwargs["type"] = 1
 
         if hasattr(func, "__slash_options__"):
-            kwargs["options"] = [o.to_dict() for o in func.__slash_options__]
+            kwargs["options"] = func.__slash_options__
 
         command = ApplicationCommand(func, **kwargs)
         return command
