@@ -1,14 +1,15 @@
 from ..client import Client
 from .command import (
-    slash_command,
-    user_command,
-    message_command,
+    slash_command as _slash_command,
+    user_command as _user_command,
+    message_command as _message_command,
     resolve_message,
     resolve_user,
 )
 from ..http import Route
 
 from collections import defaultdict
+from importlib import import_module
 
 __all__ = ("Bot",)
 
@@ -19,13 +20,27 @@ class Bot(Client):
 
         self._to_register = []
         self._commands = {}
+    
+    def load_extension(self, path):
+        module = import_module(path)
+        module.setup(self)
+        # expected to add cogs here...
 
-    def add_command(self, command):
+    def add_cog(self, cog):
+        for command in cog.__slash_commands__:
+            self.add_command(command, cog=cog)
+
+    def add_command(self, command, cog=None):
+        if cog is not None:
+            setattr(command, "cog", cog)
+        else:
+            setattr(command, "cog", None)
+
         self._to_register.append(command)
 
     def slash_command(self, **kwargs):
         def inner(func):
-            command = slash_command(**kwargs)(func)
+            command = _slash_command(**kwargs)(func)
             self.add_command(command)
             return command
 
@@ -33,7 +48,7 @@ class Bot(Client):
 
     def user_command(self, **kwargs):
         def inner(func):
-            command = user_command(**kwargs)(func)
+            command = _user_command(**kwargs)(func)
             self.add_command(command)
             return command
 
@@ -41,7 +56,7 @@ class Bot(Client):
 
     def message_command(self, **kwargs):
         def inner(func):
-            command = message_command(**kwargs)(func)
+            command = _message_command(**kwargs)(func)
             self.add_command(command)
             return command
 
@@ -117,6 +132,10 @@ class Bot(Client):
 
         if interaction.type.value == 2:
             command = self._commands[data["id"]]
+            if command.cog is not None:
+                args = (command.cog, interaction)
+            else:
+                args = (interaction,)
 
             if data["type"] == 1:
                 subcommand_name, options = await command.resolve_options(interaction)
@@ -131,13 +150,13 @@ class Bot(Client):
                 else:
                     callback = command.callback
 
-                await callback(interaction, **options)
+                await callback(*args, **options)
             elif data["type"] == 2:
                 user = resolve_user(interaction, data["target_id"])
-                await command.callback(interaction, user)
+                await command.callback(*args, user)
             elif data["type"] == 3:
                 message = resolve_message(interaction, data["target_id"])
-                await command.callback(interaction, message)
+                await command.callback(*args, message)
 
         elif interaction.type.value == 4:
             command = self._commands[data["id"]]
