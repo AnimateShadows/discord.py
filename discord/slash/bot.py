@@ -142,8 +142,9 @@ class Bot(Client):
 
                 if subcommand_name is not None:
                     for option in command.options:
-                        callback = option.subcommand_callback
-                        break
+                        if option.name == subcommand_name:
+                            callback = option.subcommand_callback
+                            break
                     else:
                         raise ValueError("unknown subcommand!")
 
