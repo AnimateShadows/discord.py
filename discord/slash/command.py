@@ -186,9 +186,16 @@ class ApplicationCommand:
         options = []
         subcommand_name = None
 
+        if "options" not in data:
+            return None, {}
+
         for option in data["options"]:
             if option["type"] == 1:
                 subcommand_name = option["name"]
+
+                if "options" not in option:
+                    return subcommand_name, {}
+
                 options = option["options"]
                 break
             else:
