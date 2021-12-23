@@ -172,9 +172,18 @@ class Bot(Client):
             for selected_option in data["options"]:
                 for option in command.options:
                     if selected_option["name"] == option.name:
-                        choices = await option.autocomplete(
-                            interaction, selected_option["value"]
-                        )
+
+                        try:
+                            choices = await option.autocomplete(
+                                interaction, selected_option["value"]
+                            )
+                        except TypeError:
+                            # might be in a cog!?
+                            
+                            choices = await option.autocomplete(
+                                command.cog, interaction, selected_option["value"]
+                            )
+
                         choices = [{"name": c, "value": c} for c in choices]
 
                         r = Route(
