@@ -161,15 +161,20 @@ class Bot(Client):
 
         elif interaction.type.value == 4:
             command = self._commands[data["id"]]
-            if data["name"] != command.name:
+            cog = command.cog
+
+            if data["options"][0]["type"] == 1:
                 for option in command.options:
-                    if option.name == data["name"]:
+                    if option.name == data["options"][0]["name"]:
                         command = option
+                        options = data["options"][0]["options"]
                         break
                 else:
                     raise ValueError("unknown subcommand!")
+            else:
+                options = data["options"]
 
-            for selected_option in data["options"]:
+            for selected_option in options:
                 for option in command.options:
                     if selected_option["name"] == option.name:
 
@@ -181,7 +186,7 @@ class Bot(Client):
                             # might be in a cog!?
                             
                             choices = await option.autocomplete(
-                                command.cog, interaction, selected_option["value"]
+                                cog, interaction, selected_option["value"]
                             )
 
                         choices = [{"name": c, "value": c} for c in choices]

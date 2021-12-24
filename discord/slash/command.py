@@ -52,10 +52,7 @@ class Option:
         else:
             self.choices = None
 
-        if "options" in kwargs:
-            self.options = [o.to_dict() for o in kwargs.pop("options")]
-        else:
-            self.options = None
+        self.options = kwargs.pop("options", None)
 
         self.min_value = kwargs.pop("min_value", None)
         self.max_value = kwargs.pop("max_value", None)
@@ -81,9 +78,12 @@ class Option:
             "required": self.required,
         }
 
-        for item in ("options", "choices", "min_value", "max_value", "channel_types"):
+        for item in ("choices", "min_value", "max_value", "channel_types"):
             if getattr(self, item) is not None:
                 data[item] = getattr(self, item)
+
+        if self.options is not None:
+            data["options"] = [o.to_dict() for o in self.options] # type: ignore
 
         data["autocomplete"] = self.autocomplete_enabled
         return data
