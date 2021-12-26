@@ -1,3 +1,4 @@
+from ..errors import HTTPException
 from ..client import Client
 from .command import (
     slash_command as _slash_command,
@@ -158,6 +159,12 @@ class Bot(Client):
             elif data["type"] == 3:
                 message = resolve_message(interaction, data["target_id"])
                 await command.callback(*args, message)
+            
+            if not interaction.response.is_done():
+                try:
+                    await interaction.response.send_message("An internal error has occurred, try again later!")
+                except HTTPException:
+                    pass
 
         elif interaction.type.value == 4:
             command = self._commands[data["id"]]
