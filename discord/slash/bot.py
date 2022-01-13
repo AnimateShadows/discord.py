@@ -1,16 +1,13 @@
-from ..errors import HTTPException
-from ..client import Client
-from .command import (
-    slash_command as _slash_command,
-    user_command as _user_command,
-    message_command as _message_command,
-    resolve_message,
-    resolve_user,
-)
-from ..http import Route
-
 from collections import defaultdict
 from importlib import import_module
+
+from ..client import Client
+from ..errors import HTTPException
+from ..http import Route
+from .command import message_command as _message_command
+from .command import resolve_message, resolve_user
+from .command import slash_command as _slash_command
+from .command import user_command as _user_command
 
 __all__ = ("Bot",)
 
@@ -21,7 +18,7 @@ class Bot(Client):
 
         self._to_register = []
         self._commands = {}
-    
+
     def load_extension(self, path):
         module = import_module(path)
         module.setup(self)
@@ -94,7 +91,12 @@ class Bot(Client):
                         self._commands[r["id"]] = c
 
                         if c.permissions is not None:
-                            permissions.append({"id": r["id"], "permissions": [p.to_dict() for p in c.permissions]})
+                            permissions.append(
+                                {
+                                    "id": r["id"],
+                                    "permissions": [p.to_dict() for p in c.permissions],
+                                }
+                            )
 
             if permissions:
                 r = Route(
@@ -117,7 +119,12 @@ class Bot(Client):
                         self._commands[r["id"]] = c
 
                         if c.permissions is not None:
-                            permissions.append({"id": r["id"], "permissions": [p.to_dict() for p in c.permissions]})
+                            permissions.append(
+                                {
+                                    "id": r["id"],
+                                    "permissions": [p.to_dict() for p in c.permissions],
+                                }
+                            )
 
             if permissions:
                 r = Route(
@@ -159,10 +166,12 @@ class Bot(Client):
             elif data["type"] == 3:
                 message = resolve_message(interaction, data["target_id"])
                 await command.callback(*args, message)
-            
+
             if not interaction.response.is_done():
                 try:
-                    await interaction.response.send_message("An internal error has occurred, try again later!")
+                    await interaction.response.send_message(
+                        "An internal error has occurred, try again later!"
+                    )
                 except HTTPException:
                     pass
 
@@ -183,15 +192,18 @@ class Bot(Client):
 
             for selected_option in options:
                 for option in command.options:
-                    if selected_option["name"] == option.name:
-
+                    if (
+                        selected_option["name"] == option.name
+                        and option.autocomplete_enabled
+                        and "focused" in selected_option
+                    ):
                         try:
                             choices = await option.autocomplete(
                                 interaction, selected_option["value"]
                             )
                         except TypeError:
                             # might be in a cog!?
-                            
+
                             choices = await option.autocomplete(
                                 cog, interaction, selected_option["value"]
                             )

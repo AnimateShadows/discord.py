@@ -1,19 +1,12 @@
-from ..user import User
-from ..member import Member
-from ..role import Role
-from ..channel import (
-    TextChannel,
-    DMChannel,
-    VoiceChannel,
-    CategoryChannel,
-    StoreChannel,
-    Thread,
-    StageChannel,
-)
-from ..message import Message
-
 import inspect
 from typing import Union
+
+from ..channel import (CategoryChannel, DMChannel, StageChannel, StoreChannel,
+                       TextChannel, Thread, VoiceChannel)
+from ..member import Member
+from ..message import Message
+from ..role import Role
+from ..user import User
 
 
 class Range:
@@ -83,7 +76,7 @@ class Option:
                 data[item] = getattr(self, item)
 
         if self.options is not None:
-            data["options"] = [o.to_dict() for o in self.options] # type: ignore
+            data["options"] = [o.to_dict() for o in self.options]  # type: ignore
 
         data["autocomplete"] = self.autocomplete_enabled
         return data
