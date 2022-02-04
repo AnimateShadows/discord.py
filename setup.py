@@ -52,6 +52,7 @@ packages = [
     'discord.webhook',
     'discord.ext.commands',
     'discord.ext.tasks',
+    'discord.slash'
 ]
 
 setup(name='discord.py',
